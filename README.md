@@ -1,2 +1,2 @@
 # Deep_Fakes
-Implementation of deep fake algorithm
+Ongoing project of implementing a photo realistic deep fake algorithm for images.
