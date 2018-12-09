@@ -4,34 +4,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skimage
 from tqdm import tqdm
+from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
 
 class Deep:
 
-    def __init__(self, batch_size = 16, epochs = 20):
+    def __init__(self, batch_size = 16, epochs = 10):
         self.batch_size = batch_size
         self.epochs = epochs
         self.dataset = self.make_tf_dataset()
-        self.model()
+        self.create_model()
+        self.saver = tf.train.Saver()
 
-    def model(self):
+    def create_model(self):
         """
         Autoencoder model
+        With initializable iterator.
+        No need to dataset.repeat(no_epochs) just initialize to 
+        beginning of dataset every epoch.
         """
-        #iterator = self.dataset.make_one_shot_iterator()
-        
         self.place_holder = tf.placeholder(tf.float32, [None, 256, 256, 3])
         dataset = tf.data.Dataset.from_tensor_slices(self.place_holder).batch(self.batch_size)
         self.iterator = dataset.make_initializable_iterator()
         x = self.iterator.get_next()
         xflat = tf.contrib.layers.flatten(x)
-        latent_space = tf.contrib.layers.fully_connected(xflat, 20)
+        latent_space_1 = tf.contrib.layers.fully_connected(xflat, 60)
+        latent_space_2 = tf.contrib.layers.fully_connected(latent_space_1, 60)
+        latent_space = tf.contrib.layers.fully_connected(latent_space_2, 60)
         logits = tf.contrib.layers.fully_connected(latent_space, 256*256*3)
         logits = tf.reshape(logits, [-1, 256, 256, 3])
         self.predictions = logits
         self.loss = tf.losses.mean_squared_error(x, logits)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(self.loss)
 
-    def train(self):
+    def train(self, save_model = False):
         fig=plt.figure(figsize=(6, 6))
         iterations = self.epochs*self.dataset.shape[0]
         with tf.Session() as sess, tqdm(total = iterations) as pbar:
@@ -41,10 +46,13 @@ class Deep:
                 try:
                     while True:
                         loss, im, _ = sess.run([self.loss, self.predictions, self.optimizer])
-                        self.plot_progress(fig,im)
+                        print(loss)
                         pbar.update(self.batch_size)
                 except tf.errors.OutOfRangeError:
                     pass
+                self.plot_progress(fig,im)
+            if save_model:
+                self.saver.save(sess, './one')
 
     def load_data(self, name):
         """
@@ -78,7 +86,11 @@ class Deep:
             plt.axis('off')
         plt.pause(0.01)
 
+    def show_saved_variables(self, filename):
+        print_tensors_in_checkpoint_file(file_name=filename, tensor_name='', all_tensors = False)        
+
 if __name__ == '__main__':
     a = Deep()
     a.train()
+
 
